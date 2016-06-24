@@ -1,0 +1,395 @@
+/---------------------------------------------------------------\
+|  Author:      Lucian Maly <lucian.maly@oracle.com>            |
+|  Last update: 2016-06-24 (for Docker v1.10.2, build c3959b1)  |
+\---------------------------------------------------------------/
+
+LEGEND
+------
+
+Image names:    redis, jenkins, nginx
+Container name: mydb
+Commit ID:      c7337
+Note:           Some entries have more than one example
+
+
+MANAGE REGISTRY
+---------------
+
+Log in to the Docker hub registry:
+$ docker login <someregistry.example.com>
+
+Log out from the registry previously logged in and check if it was really removed:
+$ docker logout; ls -la ~/.docker
+
+
+GENERAL USAGE
+-------------
+
+Find out installed Docker version:
+$ docker --version
+$ docker version
+
+Check if the Docker daemon is running and Docker server info:
+$ docker info
+
+Make sure Docker server starts automatically on boot (RHEL7):
+$ sudo systemctl enable docker; sudo systemctl start docker
+
+Create a new container with a specific name (otherwise name is randomized), but don't start it:
+$ docker create --name="Lucian's awesome service" ubuntu:latest
+
+Start/restart a stopped container:
+$ docker start mydb
+$ docker start c7337
+
+Run a container in the background (docker run = docker create + docker start):
+$ docker run -d jenkins
+
+Run an interactive container:
+$ docker run -it ubuntu bash
+
+Run a container automatically removed on stop:
+$ docker run --rm ubuntu bash
+
+Run a named container:
+$ docker run --name mydb redis
+
+Inspect a docker container:
+$ docker inspect mydb
+
+Pausing/unpausing the container:
+$ docker pause c7337
+$ docker unpause c7337
+
+Stop a container:
+$ docker stop mydb
+
+SIGKILL after 25s if has not stopped by SIGTERM:
+$ docker stop -t 25 mydb
+
+SIGKILL a container:
+$ docker kill mydb
+$ docker kill --signal=USR1 c7337
+
+Add metadata/labels to a container:
+$ docker run -d label=traffic.backend=jenkins jenkins
+$ docker run -d --name labels -l deployer=Lucian -l tester=Lucian ubuntu:latest sleep 1000
+
+Add environment variable to the container run:
+$ docker run -d -p 8080:8080 -e ENV="Hello" mydb
+
+Run another process in the running container, get inside the container:
+$ docker exec -it c7337 bash
+
+Show live logs of the running daemon container:
+$ docker logs -f c7337
+
+
+MANAGE CONTAINERS
+-----------------
+
+List running containers:
+$ docker ps
+
+List all containers (running & stopped):
+$ docker ps -a
+
+Download image from the registry:
+$ docker pull ubuntu:latest
+
+Inspect containers metadata:
+$ docker inspect c7337
+
+List local available images:
+$ docker images
+
+Delete an image and all associated filesystem layers:
+$ docker rmi c7337
+
+Delete all stopped containers:
+$ docker rm $(docker ps --filter status=exited -q)
+
+Delete all containers that exited with a nonzero state:
+$ docker rm $(docker ps -a -q --filter 'exited!=0')
+
+Delete all of the containers and images on the Docker host:
+$ docker rm $(docker ps -a -q); docker rmi $(docker images -q -)
+
+List all containers with a specific label:
+$ docker ps --filter label=traffic.backend
+
+Query a specific metadata of a running container:
+$ docker inspect -f '{.NetworkSettings.IPAddress}' c7337
+
+
+BUILD IMAGES
+------------
+
+Build an image from Dockerfile in the current directory:
+$ docker build --tag myimage .
+
+Force rebuild of Docker image:
+$ docker build --no-cache .
+
+Convert a container to an image:
+$ docker commit c7337 myimage
+
+Remove all untagged images:
+$ docker rmi $(docker images -q -f "dangling=true")
+
+See the timeline/history of your images:
+$ docker history myimage
+
+
+VOLUMES
+-------
+
+Create a local volume:
+$ docker volume create --name myvol
+
+Mounting a volume on container start:
+$ docker run -v myvol:/data redis
+
+Destroy a volume:
+$ docker volume rm myvol
+
+List volumes:
+$ docker volume ls
+
+Mount /mnt/session_data to /data within the container read-only:
+$ docker run --rm -ti --read-only=true -v /mnt/session_data:/data ubuntu:latest /bin/bash
+
+
+NETWORKING
+----------
+
+Export port 80 from a container to port 80 on the host:
+$ docker run -p 80:80 -d nginx
+
+Create a local network:
+$ docker network create mynet
+
+Attach a container to a network on start:
+$ docker run -d --net mynet redis
+
+Connect a running container from a network:
+$ docker network connect mynet c7337
+
+Disconnect container from a network:
+$ docker network disconnect mynet c7337
+
+Configure a hostname in the container:
+$ docker run --rm -ti --hostname="mycontainer.example.com" ubuntu:latest
+
+Configure domain name service (DNS) in the container:
+$ docker run --rm -ti --dns=8.8.8.8 --dns=8.8.4.4 --dns-search=example1.com --dns-search=example2.com ubuntu:latest /bin/bash
+
+Specify MAC address for the container:
+$ docker run --rm -ti --max-address="68:F7:28:8A:C4:7F" ubuntu:latest
+
+Show exposed ports of a container:
+$ docker port c7337
+
+
+PERFORMANCE & DEBUG
+-------------------
+
+Container stats:
+$ docker stats c7337
+
+See the event log of the containers:
+$ docker events
+
+Debugging the container's resources:
+$ docker top c7337
+
+Create load average of around 5 by creating two CPU-bound processes, one I/O bound process and two memory allocation processes:
+$ docker run --rm -ti progrium/stress --cpu 2 --io 1 --vm 2 --vm-bytes 128M --timeout 120s
+
+...same, but with only half the amount of available CPU time:
+$ docker run --rm -ti -c 512 progrium/stress --cpu 2 --io 1 --vm 2 --vm-bytes 128M --timeout 120s
+
+Pin a container to one or more CPUs, indexed from 0:
+$ docker run --rm -ti -c 512 --cpuset=0 progrium/stress --cpu 2 --io 1 --vm 2 --vm-bytes 128M --timeout 120s
+
+Passing the memory constraints:
+$ docker run --rm -ti -m 512m progrium/stress --cpu 2 --io 1 --vm 2 --vm-bytes 128M --timeout 120s
+
+Define total amount of memory and swap available to the container:
+$ docker run --rm -ti -m 512m --memory-swap=769m progrium/stress --cpu 2 --io 1 --vm 2 --vm-bytes 128M --timeout 120s
+
+Start all containers with a hard limit of 150 open files and 20 processes:
+$ sudo docker -d --default-ulimit nofile=50:150 --default-ulimit nproc=10:20
+
+...override specific container values by passing:
+$ docker run -d --ulimit nproc=100:200 nginx
+
+Change the containerization driver to LXC:
+$ docker -d -e lxc
+
+Change the storage driver from AUFS to devicemapper:
+$ docker -d --storage-driver=devicemapper
+
+CPU controller:
+$ sudo ls /sys/fs/cgroup/cpu/docker/<c7337...>
+$ sudo cat /sys/fs/cgroup/cpu/docker/<c7337...>/cpu.shares
+
+Example of running container in privileged mode, memory swapfile creation:
+$ docker run -ti --rm --privileged=true ubuntu /bin/bash
+  $ dd if=/dev/zero of=/swapfile1 bs=1024 count=100
+  $ mkswap /swapfile1
+  $ swapon /swapfile1
+  $ swapoff /swapfile1
+  $ exit
+$ sudo swapoff /var/lib/docker/overlay/<c7337...>/upper/swapfile1
+
+Add only certain linux capabilities to the run:
+$ docker run -ti --rm --cap-add=NET_ADMIN ubuntu /bin/bash
+
+Explore dependencies:
+$ docker run --publish=8085:8080 --detach=true --name=static-helloworld adejonge/helloworld:latest
+$ docker info | grep 'Root Dir:'
+$ ls -R /mnt/sda1/var/lib/docker/aufs/mnt/<c7337...>
+
+
+APPENDIX#1 - USAGE
+------------------
+
+[lmaly@oracle-linux ~]$ docker --help
+[lmaly@oracle-linux ~]$ docker COMMAND --help
+
+docker [OPTIONS] COMMAND [arg...]
+docker daemon [ --help | ... ]
+docker [ --help | -v | --version ]
+
+OPTIONS:
+--config=~/.docker              Location of client config files
+-D, --debug                     Enable debug mode
+-H, --host=[]                   Daemon socket(s) to connect to
+-h, --help                      Print usage
+-l, --log-level=info            Set the logging level
+--tls                           Use TLS; implied by --tlsverify
+--tlscacert=~/.docker/ca.pem    Trust certs signed only by this CA
+--tlscert=~/.docker/cert.pem    Path to TLS certificate file
+--tlskey=~/.docker/key.pem      Path to TLS key file
+--tlsverify                     Use TLS and verify the remote
+-v, --version                   Print version information and quit
+
+COMMANDS:
+attach    Attach to a running container
+build     Build an image from a Dockerfile
+commit    Create a new image from a container's changes
+cp        Copy files/folders between a container and the local filesystem
+create    Create a new container
+diff      Inspect changes on a container's filesystem
+events    Get real time events from the server
+exec      Run a command in a running container
+export    Export a container's filesystem as a tar archive
+history   Show the history of an image
+images    List images
+import    Import the contents from a tarball to create a filesystem image
+info      Display system-wide information
+inspect   Return low-level information on a container or image
+kill      Kill a running container
+load      Load an image from a tar archive or STDIN
+login     Register or log in to a Docker registry
+logout    Log out from a Docker registry
+logs      Fetch the logs of a container
+network   Manage Docker networks
+pause     Pause all processes within a container
+port      List port mappings or a specific mapping for the CONTAINER
+ps        List containers
+pull      Pull an image or a repository from a registry
+push      Push an image or a repository to a registry
+rename    Rename a container
+restart   Restart a container
+rm        Remove one or more containers
+rmi       Remove one or more images
+run       Run a command in a new container
+save      Save an image(s) to a tar archive
+search    Search the Docker Hub for images
+start     Start one or more stopped containers
+stats     Display a live stream of container(s) resource usage statistics
+stop      Stop a running container
+tag       Tag an image into a repository
+top       Display the running processes of a container
+unpause   Unpause all processes within a container
+update    Update resources of one or more containers
+version   Show the Docker version information
+volume    Manage Docker volumes
+wait      Block until a container stops, then print its exit code
+
+
+APPENDIX#2 - SWARM
+------------------
+
+(1) Download the swarm container onto the Docker host:
+$ docker pull swarm
+
+(2) Create a Docker cluster by running the Swarm container:
+$ docker run --rm swarm create
+
+(3) Register a Docker host with our cluster, provide IP+port of our Docker host and the first received token:
+$ docker run -d swarm join --addr=172.17.42.10:2375 token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl
+
+(4) Check if it started:
+$ docker ps
+
+(5) Deploy swarm manager to any one of the Docker hosts in the cluster:
+$ docker run -d -p 9999:2375 swarm manage token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl
+
+(6) List all of the nodes in our cluster:
+$ docker run --rm swarm list token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl 172.17.42.10:2375
+
+(7) Make sure Docker does not try to use TLS when connecting to the Swarm port:
+$ echo $DOCKER_HOST; unset DOCKER_HOST
+$ echo $DOCKER_TLS_VERIFY; unset DOCKER_TLS_VERIFY
+$ echo $DOCKER_TLS; unset DOCKER_TLS
+$ echo $DOCKER_CERT_PATH; unset DOCKER_CERT_PATH
+
+(8) Set DOCKER_HOST environment variable to the IP+port that our manager is running on:
+$ export DOCKER_HOST="tcp://172.17.42.10:9999"((("docker", "info")))
+
+(9) And you will be able to run normal Docker commands against the swarm:
+$ docker info
+
+(10) Run an nginx container in our new cluster:
+$ docker run -d nginx
+$ docker ps
+$ docker ps -a
+
+
+APPENDIX#3 - AWS
+----------------
+
+(1) Setup Amazon EC2 container service:
+$ sudo yum -y install python
+$ pip install awscli
+$ aws --version
+$ aws configure
+$ aws iam list-users
+
+(2) Start the cluster:
+$ aws ecs create-cluster --cluster-name testing
+
+(3) Add the existing Docker hosts to that cluster:
+$ sudo docker run --name ecs-agent -d -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/ecs/:/log -p 127.0.0.1:51678:51678 -e ECS_LOGFILE=/log/ecs-agent.log -e ECS_LOGLEVEL=info -e ECS_CLUSTER=testing amazon/amazon-ecs-agent:latest
+
+(4) Check if the instance was added to the cluster:
+$ aws ecs list-container-instances --cluster testing
+$ aws ecs describe-container-instances --cluster testing --container-instances zse12345-12b3-45gf-6789-12ab34cd56ef78
+
+(5) Upload task definition to Amazon:
+$ aws ecs register-task-definition --family starwars-telnet --container-definitions file://$HOME/starwars-task.json
+
+(6) List all task definitions:
+$ aws ecs list-task-definitions
+
+(7) Run the task in the cluster:
+$ aws ecs run-task --cluster testing --task-definition starwars-telnet:1 --count 1
+
+(8) Ensure the task transitioned to the running state by passing ARN task hash from the previous step:
+$ aws ecs describe-tasks --cluster testing --task b64b1d23-bad2-872e-b007-88fd6
+
+(9) Stop the task:
+$ aws ecs stop-tasks --cluster testing --task b64b1d23-bad2-872e-b007-88fd6
