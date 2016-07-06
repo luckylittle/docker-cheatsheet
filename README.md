@@ -1,4 +1,10 @@
-# docker-cheatsheet
-<p>
-<h1> This is the only Docker document that you will ever need </h1>
-</p>
+### docker-cheatsheet
+This is the only Docker document that you will ever need!
+
+### Installation
+```sh
+wget https://raw.githubusercontent.com/luckylittle/docker-cheatsheet/master/docker-cheatsheet.txt
+```
+
+### Contributors
+Lucian Maly <<lucian.maly@oracle.com>>
