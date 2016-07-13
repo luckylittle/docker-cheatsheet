@@ -1,6 +1,8 @@
 /---------------------------------------------------------------\
 |  Author:      Lucian Maly <lucian.maly@oracle.com>            |
-|  Last update: 2016-06-24 (for Docker v1.10.2, build c3959b1)  |
+|  Last update: 2016-07-13 (for Docker v1.10.2, build c3959b1)  |
+|                        Docker-machine v0.7.0, build a650a40   |
+|                        Docker-compose v1.6.2, build 4d72027   |
 \---------------------------------------------------------------/
 
 LEGEND
@@ -15,7 +17,7 @@ Note:           Some entries have more than one example
 MANAGE REGISTRY
 ---------------
 
-Log in to the Docker hub registry:
+Log in to the Docker hub registry
 $ docker login <someregistry.example.com>
 
 Log out from the registry previously logged in and check if it was really removed:
@@ -44,9 +46,11 @@ $ docker start c7337
 
 Run a container in the background (docker run = docker create + docker start):
 $ docker run -d jenkins
+$ docker run -d <image>:<tag>
 
 Run an interactive container:
 $ docker run -it ubuntu bash
+$ docker run -it <image>:<tag> <command>
 
 Run a container automatically removed on stop:
 $ docker run --rm ubuntu bash
@@ -80,9 +84,11 @@ $ docker run -d -p 8080:8080 -e ENV="Hello" mydb
 
 Run another process in the running container, get inside the container:
 $ docker exec -it c7337 bash
+$ docker exec nginx "yum -y update nginx"
 
 Show live logs of the running daemon container:
 $ docker logs -f c7337
+$ docker logs <container_name>
 
 
 MANAGE CONTAINERS
@@ -94,8 +100,15 @@ $ docker ps
 List all containers (running & stopped):
 $ docker ps -a
 
+Searching Docker images:
+$ docker search ubuntu
+
 Download image from the registry:
 $ docker pull ubuntu:latest
+$ docker pull debian@sha256:asd654ferf564rwer21fvwrd654rwefv213s
+
+Push the image to the registry:
+$ docker push <dockerhub_username>/<image_name>
 
 Inspect containers metadata:
 $ docker inspect c7337
@@ -103,8 +116,17 @@ $ docker inspect c7337
 List local available images:
 $ docker images
 
+Rename container:
+$ docker rename <current_name> <new_name>
+
 Delete an image and all associated filesystem layers:
 $ docker rmi c7337
+
+Remove unwanted container, or reuse a name you previously assigned to a container:
+$ docker rm <container_name>
+
+Force removal of the image, if the image is referenced in one or more repositories:
+$ docker rmi -f ubuntu:trusty
 
 Delete all stopped containers:
 $ docker rm $(docker ps --filter status=exited -q)
@@ -127,18 +149,30 @@ BUILD IMAGES
 
 Build an image from Dockerfile in the current directory:
 $ docker build --tag myimage .
+$ docker build -t <dockerhub_username>/<dockerhub_repository> .
+$ docker build -f <path_to_Dockerfile> -t <repository>:<tag>
 
 Force rebuild of Docker image:
 $ docker build --no-cache .
 
 Convert a container to an image:
 $ docker commit c7337 myimage
+$ docker commit <container_ID> <repository>:<tag>
+
+Preserve any CMD or ENTRYPOINT instructions that are inherited from the base image:
+$ docker commit --change 'CMD ["/bin/bash"]' <container_ID> <image_name>
 
 Remove all untagged images:
 $ docker rmi $(docker images -q -f "dangling=true")
 
 See the timeline/history of your images:
 $ docker history myimage
+
+Building images of existing machines using tar:
+$ sudo apt-get install -y debootstrap
+$ sudo debootstrap <distribution_codename> <directory_name> > /dev/null
+$ sudo tar -C <directory_name> -c . | sudo docker import - <image_name>
+$ docker images
 
 
 VOLUMES
@@ -165,6 +199,7 @@ NETWORKING
 
 Export port 80 from a container to port 80 on the host:
 $ docker run -p 80:80 -d nginx
+$ docker run -dp <host_port>:<container_port> <image>:<tag>
 
 Create a local network:
 $ docker network create mynet
@@ -202,6 +237,7 @@ $ docker events
 
 Debugging the container's resources:
 $ docker top c7337
+$ docker top <container_name>
 
 Create load average of around 5 by creating two CPU-bound processes, one I/O bound process and two memory allocation processes:
 $ docker run --rm -ti progrium/stress --cpu 2 --io 1 --vm 2 --vm-bytes 128M --timeout 120s
@@ -250,6 +286,34 @@ Explore dependencies:
 $ docker run --publish=8085:8080 --detach=true --name=static-helloworld adejonge/helloworld:latest
 $ docker info | grep 'Root Dir:'
 $ ls -R /mnt/sda1/var/lib/docker/aufs/mnt/<c7337...>
+
+
+SECURITY
+--------
+
+Defang setuid/setgid binaries:
+$ docker run debian \
+  find \ -perm +6000 -type f -exec ls -ld {} \; 2> /dev/null
+$ vim Dockerfile
+  FROM debian:wheezy
+  RUN find / -perm +6000 -type f -exec chmod a-s {} \; || true
+  
+Be aware of CPU shares and memory:
+$ docker run -d -c 512 myimage
+$ docker run -m 512m myimage
+
+Set container filesystem to read-only:
+$ docker run --read-only debian
+
+Set volumes to read-only:
+$ docker run -v $(pwd)/secrets:/secrets:ro debian
+
+Turn off inter-container communication:
+$ docker -d --icc=false --iptables
+
+Do not install unnecessary packages in the container:
+$ docker exec $INSTANCE_ID rpm -qa
+$ docker exec $INSTANCE_ID dpkg -l
 
 
 APPENDIX#1 - USAGE
@@ -329,8 +393,17 @@ $ docker pull swarm
 (2) Create a Docker cluster by running the Swarm container:
 $ docker run --rm swarm create
 
-(3) Register a Docker host with our cluster, provide IP+port of our Docker host and the first received token:
+(3a) Register a Docker host with our cluster, provide IP+port of our Docker host and the first received token:
 $ docker run -d swarm join --addr=172.17.42.10:2375 token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl
+
+OR
+
+(3b) Invoke a Docker Machine command to create a new Docker container and join it to the existing Swarm cluster:
+$ docker-machine create \
+  -d virtualbox \
+  --swarm \
+  --swarm-discovery token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl \
+  swarm-node1
 
 (4) Check if it started:
 $ docker ps
@@ -393,3 +466,133 @@ $ aws ecs describe-tasks --cluster testing --task b64b1d23-bad2-872e-b007-88fd6
 
 (9) Stop the task:
 $ aws ecs stop-tasks --cluster testing --task b64b1d23-bad2-872e-b007-88fd6
+
+
+APPENDIX#4 - DOCKER MACHINE
+---------------------------
+
+[lmaly@lmaly-au-linux ~]$ docker-machine --help
+Usage: docker-machine [OPTIONS] COMMAND [arg...]
+
+Create and manage machines running Docker.
+
+Version: 0.7.0, build a650a40
+
+Author:
+Docker Machine Contributors - <https://github.com/docker/machine>
+
+Options:
+--debug, -D						Enable debug mode
+-s, --storage-path "/home/lmaly/.docker/machine"	Configures storage path [$MACHINE_STORAGE_PATH]
+--tls-ca-cert 					CA to verify remotes against [$MACHINE_TLS_CA_CERT]
+--tls-ca-key 						Private key to generate certificates [$MACHINE_TLS_CA_KEY]
+--tls-client-cert 					Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
+--tls-client-key 					Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
+--github-api-token 					Token to use for requests to the Github API [$MACHINE_GITHUB_API_TOKEN]
+--native-ssh						Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
+--bugsnag-api-token 					BugSnag API token for crash reporting [$MACHINE_BUGSNAG_API_TOKEN]
+--help, -h						show help
+--version, -v						print the version
+
+Commands:
+active		Print which machine is active
+config		Print the connection config for machine
+create		Create a machine
+env			Display the commands to set up the environment for the Docker client
+inspect		Inspect information about a machine
+ip			Get the IP address of a machine
+kill			Kill a machine
+ls			List machines
+provision		Re-provision existing machines
+regenerate-certs	Regenerate TLS Certificates for a machine
+restart		Restart a machine
+rm			Remove a machine
+ssh			Log into or run a command on a machine with SSH.
+scp			Copy files between machines
+start			Start a machine
+status		Get the status of a machine
+stop			Stop a machine
+upgrade		Upgrade a machine to the latest version of Docker
+url			Get the URL of a machine
+version		Show the Docker Machine version or a machine docker version
+help			Shows a list of commands or help for one command
+
+Run 'docker-machine COMMAND --help' for more information on a command.
+
+$ docker-machine [OPTIONS] COMMAND [arg...]
+$ docker-machine create
+$ docker-machine create -d virtualbox node1
+$ docker-machine ls
+$ docker-machine restart
+$ docker-machine restart chefclient
+$ docker-machine stop node1
+
+
+APPENDIX#5 - DOCKER COMPOSE
+---------------------------
+
+[lmaly@lmaly-au-linux ~]$ docker-compose --help
+Define and run multi-container applications with Docker.
+
+Usage:
+docker-compose [-f=<arg>...] [options] [COMMAND] [ARGS...]
+docker-compose -h|--help
+
+Options:
+-f, --file FILE           Specify an alternate compose file (default: docker-compose.yml)
+-p, --project-name NAME   Specify an alternate project name (default: directory name)
+--verbose                 Show more output
+-v, --version             Print version and exit
+
+Commands:
+build              Build or rebuild services
+config             Validate and view the compose file
+create             Create services
+down               Stop and remove containers, networks, images, and volumes
+events             Receive real time events from containers
+help               Get help on a command
+kill               Kill containers
+logs               View output from containers
+pause              Pause services
+port               Print the public port for a port binding
+ps                 List containers
+pull               Pulls service images
+restart            Restart services
+rm                 Remove stopped containers
+run                Run a one-off command
+scale              Set number of containers for a service
+start              Start services
+stop               Stop services
+unpause            Unpause services
+up                 Create and start containers
+version            Show the Docker-Compose version information
+
+$ docker-compose [-f=<arg>...] [options] [COMMAND] [ARGS...]
+$ docker-compose ps
+$ docker-compose restart
+$ docker-compose restart <service>
+$ docker-compose restart node1
+$ docker-compose up
+$ docker-compose up -d
+$ docker-compose scale web=3
+
+
+APPENDIX #6 - DOCKERFILE
+------------------------
+a/ FROM           - what base image will be used to create a new image
+b/ MAINTAINER     - who is the owner of this new image
+c/ WORKDIR        - sets the working directory for the same set of instructions that the USER can use (ADD, RUN, CMD, ENTRYPOINT)
+    *ONBUILD      - stash set of commands that will be used when the image is used again as a base image in another Dockerfile
+                  - if you want to give an image to i.e. developers and they all have different code that they want to test
+                  - you can lay the groundwork ahead of needing the actual code, developers simply add their code in the directory that you tell them
+                  - will be executed immediately after FROM
+                  - can be used in conjunction with ADD, RUN
+d/ RUN            - fetch and install packages or execute any other commands
+                  - every time you utilize RUN, it creates a new layer, it is better to chain commands (; and \)
+e/ LABEL          - version/description, it will be shown by docker inspect <image>
+f/ COPY or ADD    - add files or folders into the image, ADD can even download and unpack from the URL
+                  - COPY is the same without URL and unpacking capability
+g/ EXPOSE         - expose ports from the image to the outside world
+h/ ENTRYPOINT     - use in conjunction with CMD, set additional switches that may change over time based on the CMD command
+    *CMD          - executes the given commands and keeps the container running
+i/ USER           - what username to use when a command is run (influences RUN, CMD, ENTRYPOINT)
