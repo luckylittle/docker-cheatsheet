@@ -23,6 +23,15 @@ $ docker login <someregistry.example.com>
 Log out from the registry previously logged in and check if it was really removed:
 $ docker logout; ls -la ~/.docker
 
+Setup private registry:
+$ docker run -p 5000:5000 registry
+$ ID='docker run -id fedora /bin/bash'
+$ docker commit $ID fedora-20
+$ docker tag fedora-20 registry-host:5000/lmaly/f20
+$ docker -d --insecure-registry registry-host:5000
+$ docker push registry-host:5000/lmaly/f20
+$ docker pull registry-host:5000/lmaly/f20
+
 
 GENERAL USAGE
 -------------
@@ -89,8 +98,8 @@ Run another process in the running container, get inside the container:
 $ docker exec -it c7337 bash
 $ docker exec nginx "yum -y update nginx"
 
-Show live logs of the running daemon container:
-$ docker logs -f c7337
+Show live logs of the running daemon container as well as timestamps:
+$ docker logs -ft c7337
 $ docker logs <container_name>
 
 
@@ -166,7 +175,7 @@ Convert a container to an image:
 $ docker commit c7337 myimage
 -When you exit the container, it stops running but IT IS still available to you until you remove it entirely with 'docker rm'
 Before removing it, you need to commit:
-$ docker commit <container_ID> <repository>:<tag>
+$ docker commit -a <AUTHOR> -m <COMMENT> <container_ID> <repository>:<tag>
 Now you can safely remove the stopped container
 
 Preserve any CMD or ENTRYPOINT instructions that are inherited from the base image:
@@ -177,6 +186,13 @@ $ docker rmi $(docker images -q -f "dangling=true")
 
 See the timeline/history of your images:
 $ docker history myimage
+
+Get tree-like view of images:
+$ docker images -t
+
+See dependencies graphically:
+$ docker images --viz | dot -Tpng -o /tmp/docker_dependencies.png
+$ display /tmp/docker_dependencies.png
 
 Building images of existing machines using tar:
 $ sudo apt-get install -y debootstrap
@@ -231,6 +247,17 @@ $ docker volume ls
 Mount /mnt/session_data to /data within the container read-only:
 $ docker run --rm -ti --read-only=true -v /mnt/session_data:/data ubuntu:latest /bin/bash
 
+Have multiple data volumes within a container:
+$ docker run -t -d -P -v /data -v logs --name f20 fedora /bin/bash
+
+Data volume container scenario:
+$ docker run -d -v /data --name data fedora echo "data volume container"
+$ docker run -d -it --volumes-from data --name client1 fedora /bin/bash
+$ docker run -d -it --volumes-from data --name client2 fedora /bin/bash
+
+You can give access of a host devie to the container:
+$ docker run --device=/dev/sdc:/dev/xvdc -it fedora /bin/bash
+
 Copying data from container to host:
 $ docker cp <container_name>:/<dir>/<file.ext> .
 
@@ -252,6 +279,7 @@ NETWORKING
 -on the host itself, there will be virtual NIC (e.g. veth450b81a)
 --net=none                       - only loopback
 --net=host                       - network of the container is the same as the one of the host
+--net=bridge                     - default
 --net=container:<container_name> - container has sane ip and hostname as the first container
 --bip=172.17.0.1/17              - docker0 bridge ip address
 --fixed-cidr=172.17.0.0/17       - give containers ip addresses in the specific network
@@ -262,6 +290,16 @@ $ docker run -dp <host_port>:<container_port> <image>:<tag>
 
 Expose/Publish all exposed ports to random ports on the host:
 $ docker run -d -P flask
+
+To bind to a specific interface
+$ docker run -id -p 192.168.1.10:5000:22 --name f20 fedora /bin/bash
+-Requests coming to port 5000 on the interface that has the IP 192.168.1.10 on the Docker host will be forwarded to port 22 of the f20 container
+
+Map port 22 of the container to the dynamic port of the host:
+$ docker run -id -p 192.168.1.10::22 --name f20 fedora /bin/bash
+
+Bind multiple ports on containers to ports on hosts:
+$ docker run -id -p 5000:22 -p 8080:80 --name f20 fedora /bin/bash
 
 Create a local network:
 $ docker network create mynet
@@ -313,15 +351,27 @@ Start container on this network:
 $ docker run -it --rm --publish-service=bar.foobar.overlay ubuntu:14.04 bash
 $ docker service ls
 
+IPv6
+$ vim /etc/sysconfig/docker
+  OPTIONS='--selinux-enabled --ipv6'
+$ docker -d --ipv6
+
 
 PERFORMANCE & DEBUG
 -------------------
+
+Starting Docker in debug mode:
+$ docker -d -D
 
 Container stats:
 $ docker stats c7337
 
 See the event log of the containers:
 $ docker events
+$ docker events --since '2015-01-01' --until '2016-01-01'
+$ docker events --filter 'event=start'
+$ docker events --filter 'image=centos:centos7'
+$ docker events --filter 'container=c7337dkj324kjnbr23hbv34'
 
 Debugging the container's resources:
 $ docker top c7337
@@ -406,6 +456,11 @@ $ docker exec $INSTANCE_ID dpkg -l
 Docker will not be able to manage iptable rules and ipv4 forwarding is also disabled if you use this as default:
 $ echo DOCKER_OPTS=\"--iptables=false --ip-forward=false\" >> /etc/sysconfig/docker
 # sudo systemctl restart docker
+
+Allowing writes to volume with SELinux enabled:
+$ docker run -it -v /tmp/:/tmp/host:z fedora bash
+$ docker run -it -v /tmp/:/tmp/host:Z fedora bash
+
 
 APPENDIX#1 - USAGE
 ------------------
@@ -579,6 +634,7 @@ $ docker-machine rm foobar
 
 [lmaly@lmaly-au-linux ~]$ docker-machine --help
 Usage: docker-machine [OPTIONS] COMMAND [arg...]
+Run 'docker-machine COMMAND --help' for more information on a command.
 
 Create and manage machines running Docker.
 
@@ -588,42 +644,40 @@ Author:
 Docker Machine Contributors - <https://github.com/docker/machine>
 
 Options:
---debug, -D						                            Enable debug mode
+--debug, -D                                       Enable debug mode
 -s, --storage-path "/home/lmaly/.docker/machine"  Configures storage path [$MACHINE_STORAGE_PATH]
---tls-ca-cert 				                            CA to verify remotes against [$MACHINE_TLS_CA_CERT]
---tls-ca-key 					                            Private key to generate certificates [$MACHINE_TLS_CA_KEY]
---tls-client-cert 		                            Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
---tls-client-key 			                            Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
---github-api-token 		                            Token to use for requests to the Github API [$MACHINE_GITHUB_API_TOKEN]
---native-ssh					                            Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
---bugsnag-api-token 	                            BugSnag API token for crash reporting [$MACHINE_BUGSNAG_API_TOKEN]
---help, -h						                            show help
---version, -v					                            print the version
+--tls-ca-cert                                     CA to verify remotes against [$MACHINE_TLS_CA_CERT]
+--tls-ca-key                                      Private key to generate certificates [$MACHINE_TLS_CA_KEY]
+--tls-client-cert                                 Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
+--tls-client-key                                  Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
+--github-api-token                                Token to use for requests to the Github API [$MACHINE_GITHUB_API_TOKEN]
+--native-ssh                                      Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
+--bugsnag-api-token                               BugSnag API token for crash reporting [$MACHINE_BUGSNAG_API_TOKEN]
+--help, -h                                        show help
+--version, -v                                     print the version
 
 Commands:
-active		        Print which machine is active
-config		        Print the connection config for machine
-create		        Create a machine
-env			          Display the commands to set up the environment for the Docker client
-inspect		        Inspect information about a machine
-ip			          Get the IP address of a machine
-kill			        Kill a machine
-ls			          List machines
-provision		      Re-provision existing machines
+active            Print which machine is active
+config            Print the connection config for machine
+create            Create a machine
+env               Display the commands to set up the environment for the Docker client
+inspect           Inspect information about a machine
+ip                Get the IP address of a machine
+kill              Kill a machine
+ls                List machines
+provision         Re-provision existing machines
 regenerate-certs  Regenerate TLS Certificates for a machine
-restart		        Restart a machine
-rm			          Remove a machine
-ssh			          Log into or run a command on a machine with SSH.
-scp			          Copy files between machines
-start			        Start a machine
-status		        Get the status of a machine
-stop			        Stop a machine
-upgrade		        Upgrade a machine to the latest version of Docker
-url			          Get the URL of a machine
-version		        Show the Docker Machine version or a machine docker version
-help			        Shows a list of commands or help for one command
-
-Run 'docker-machine COMMAND --help' for more information on a command.
+restart           Restart a machine
+rm                Remove a machine
+ssh               Log into or run a command on a machine with SSH.
+scp               Copy files between machines
+start             Start a machine
+status            Get the status of a machine
+stop              Stop a machine
+upgrade           Upgrade a machine to the latest version of Docker
+url               Get the URL of a machine
+version           Show the Docker Machine version or a machine docker version
+help              Shows a list of commands or help for one command
 
 $ docker-machine [OPTIONS] COMMAND [arg...]
 $ docker-machine create
