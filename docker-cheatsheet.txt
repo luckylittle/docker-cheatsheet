@@ -1,8 +1,8 @@
 /---------------------------------------------------------------\
 |  Author:      Lucian Maly <lucian.maly@oracle.com>            |
-|  Last update: 2016-07-13 (for Docker v1.10.2, build c3959b1)  |
-|                        Docker-machine v0.7.0, build a650a40   |
-|                        Docker-compose v1.6.2, build 4d72027   |
+|  Last update: 2016-07-17 (for Docker v1.10.2, build c3959b1,  |
+|                        Docker-machine v0.7.0, build a650a40,  |
+|                        Docker-compose v1.6.2, build 4d72027)  |
 \---------------------------------------------------------------/
 
 LEGEND
@@ -36,6 +36,9 @@ $ docker info
 
 Make sure Docker server starts automatically on boot (RHEL7):
 $ sudo systemctl enable docker; sudo systemctl start docker
+
+Use docker from a nonroot user, add the user to the docker group:
+$ sudo gpasswd -a $USER docker
 
 Create a new container with a specific name (otherwise name is randomized), but don't start it:
 $ docker create --name="Lucian's awesome service" ubuntu:latest
@@ -131,6 +134,10 @@ $ docker rmi -f ubuntu:trusty
 Delete all stopped containers:
 $ docker rm $(docker ps --filter status=exited -q)
 
+Remove stopped containers and all it's volumes:
+$ docker rm -v $(docker ps -a -q)
+$ sudo ls /var/lib/docker/volumes/65sd4f35s4df35sd4f354sdf
+
 Delete all containers that exited with a nonzero state:
 $ docker rm $(docker ps -a -q --filter 'exited!=0')
 
@@ -157,7 +164,10 @@ $ docker build --no-cache .
 
 Convert a container to an image:
 $ docker commit c7337 myimage
+-When you exit the container, it stops running but IT IS still available to you until you remove it entirely with 'docker rm'
+Before removing it, you need to commit:
 $ docker commit <container_ID> <repository>:<tag>
+Now you can safely remove the stopped container
 
 Preserve any CMD or ENTRYPOINT instructions that are inherited from the base image:
 $ docker commit --change 'CMD ["/bin/bash"]' <container_ID> <image_name>
@@ -173,6 +183,34 @@ $ sudo apt-get install -y debootstrap
 $ sudo debootstrap <distribution_codename> <directory_name> > /dev/null
 $ sudo tar -C <directory_name> -c . | sudo docker import - <image_name>
 $ docker images
+
+$ docker diff <container_ID>
+A=added
+C=changed
+D=deleted
+
+Rename images:
+$ docker tag ubuntu:14.04 foobar
+
+Tag image:
+$ docker tag ubuntu:14.04 foo:bar
+
+Change repository:
+$ docker tag flask how2dock/flask sebimac:flask
+$ docker tag <REGISTRYHOST>/<USERNAME>/<REPOSITORY> <IMAGE>:<TAG>
+
+Export/import/load/save container to/from tar:
+(1) Stop container
+(2) $ docker export <container_ID> > container.tar
+(3) $ docker import - <image_name> < container.tar
+-this will remove history
+
+Already commited image:
+$ docker save -o <new_image>.tar <old_image>
+$ docker rmi <old_image>
+$ docker load < <new_image>.tar
+$ docker images
+-this will retain history
 
 
 VOLUMES
@@ -193,13 +231,37 @@ $ docker volume ls
 Mount /mnt/session_data to /data within the container read-only:
 $ docker run --rm -ti --read-only=true -v /mnt/session_data:/data ubuntu:latest /bin/bash
 
+Copying data from container to host:
+$ docker cp <container_name>:/<dir>/<file.ext> .
+
+Copying data from host to container:
+$ docker cp <file.ext> <container_name>:/<dir>/<file.ext>
+
+Copying data between two containers:
+$ docker cp c1:/root/file.txt .; docker file.txt c2:/root/file.txt
+
+Inspect mount mapping:
+$ docker inspect -f {{.Mounts}} c773
+
 
 NETWORKING
 ----------
 
+-Most of the time, docker0 bridge on the host will have address 172.17.42.1
+-All containers will get address in 172.17.42.0/24 network and docker0 will be their gw
+-on the host itself, there will be virtual NIC (e.g. veth450b81a)
+--net=none                       - only loopback
+--net=host                       - network of the container is the same as the one of the host
+--net=container:<container_name> - container has sane ip and hostname as the first container
+--bip=172.17.0.1/17              - docker0 bridge ip address
+--fixed-cidr=172.17.0.0/17       - give containers ip addresses in the specific network
+
 Export port 80 from a container to port 80 on the host:
 $ docker run -p 80:80 -d nginx
 $ docker run -dp <host_port>:<container_port> <image>:<tag>
+
+Expose/Publish all exposed ports to random ports on the host:
+$ docker run -d -P flask
 
 Create a local network:
 $ docker network create mynet
@@ -224,6 +286,32 @@ $ docker run --rm -ti --max-address="68:F7:28:8A:C4:7F" ubuntu:latest
 
 Show exposed ports of a container:
 $ docker port c7337
+
+Linking two containers together:
+Docker will automatically set up the networking so that the ports exposed by the MySQL container are reachable inside the Wordpress container:
+--link <container_name>:<alias>
+$ docker run --name mysqlwordpress -e MYSQL_ROOT_PASSWORD=password -d mysql
+$ docker run --name wordpress --link mysqlwordpress:mysql -p 80:80 -d wordpress
+
+Linking three containers together:
+$ docker run -d --name database -e MYSQL_ROOT_PASSWORD=password mysql
+$ docker run -d --name web --link database:db runsweb/hostname
+$ docker run -d --name lb --link web:application nginx
+Result of linking:
+ - the application container now contains environment variable that point to the database, load balancer contains environment variables that point to the application
+ - /etc/hosts file is automatically updated to contain information for name resolution
+ - <alias> will be found in the /etc/host entry as a prefix
+ 
+What is linked together?
+$ docker inspect -f "{{.HostConfig.Links}}" application
+$ docker inspect -f "{{.HostConfig.Links}}" lb
+
+Create new overlay network:
+$ docker network create -d overlay foobar
+$ docker network ls
+Start container on this network:
+$ docker run -it --rm --publish-service=bar.foobar.overlay ubuntu:14.04 bash
+$ docker service ls
 
 
 PERFORMANCE & DEBUG
@@ -315,6 +403,9 @@ Do not install unnecessary packages in the container:
 $ docker exec $INSTANCE_ID rpm -qa
 $ docker exec $INSTANCE_ID dpkg -l
 
+Docker will not be able to manage iptable rules and ipv4 forwarding is also disabled if you use this as default:
+$ echo DOCKER_OPTS=\"--iptables=false --ip-forward=false\" >> /etc/sysconfig/docker
+# sudo systemctl restart docker
 
 APPENDIX#1 - USAGE
 ------------------
@@ -471,6 +562,21 @@ $ aws ecs stop-tasks --cluster testing --task b64b1d23-bad2-872e-b007-88fd6
 APPENDIX#4 - DOCKER MACHINE
 ---------------------------
 
+Docker-machine is client-side tool that you run on your local host and that allows you to start a server in a remote public cloud and use it as a Docker host if it were local.
+
+(1) Generate an API access token for using Docker Machine in the Digital Ocean UI.
+(2) Set environment variable DIGITALOCEAN_ACCESS_TOKEN in your local computer shell that defines the token you created and then create the driver:
+$ export DIGITALOCEAN_ACCESS_TOKEN=sdf354sefg86w4erf351f534efw
+$ docker-machine create -d digitalocean foobar
+(4) To see how to connect Docker to the Docker machine:
+$ docker-machine env foobar
+(5) List the machine created previously, obtain it's IP & ssh to it:
+$ docker-machine ls
+$ docker-machine ip foobar
+$ docker-machine ssh foobar
+(6) Remove the machine you created:
+$ docker-machine rm foobar
+
 [lmaly@lmaly-au-linux ~]$ docker-machine --help
 Usage: docker-machine [OPTIONS] COMMAND [arg...]
 
@@ -482,40 +588,40 @@ Author:
 Docker Machine Contributors - <https://github.com/docker/machine>
 
 Options:
---debug, -D						Enable debug mode
--s, --storage-path "/home/lmaly/.docker/machine"	Configures storage path [$MACHINE_STORAGE_PATH]
---tls-ca-cert 					CA to verify remotes against [$MACHINE_TLS_CA_CERT]
---tls-ca-key 						Private key to generate certificates [$MACHINE_TLS_CA_KEY]
---tls-client-cert 					Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
---tls-client-key 					Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
---github-api-token 					Token to use for requests to the Github API [$MACHINE_GITHUB_API_TOKEN]
---native-ssh						Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
---bugsnag-api-token 					BugSnag API token for crash reporting [$MACHINE_BUGSNAG_API_TOKEN]
---help, -h						show help
---version, -v						print the version
+--debug, -D						                            Enable debug mode
+-s, --storage-path "/home/lmaly/.docker/machine"  Configures storage path [$MACHINE_STORAGE_PATH]
+--tls-ca-cert 				                            CA to verify remotes against [$MACHINE_TLS_CA_CERT]
+--tls-ca-key 					                            Private key to generate certificates [$MACHINE_TLS_CA_KEY]
+--tls-client-cert 		                            Client cert to use for TLS [$MACHINE_TLS_CLIENT_CERT]
+--tls-client-key 			                            Private key used in client TLS auth [$MACHINE_TLS_CLIENT_KEY]
+--github-api-token 		                            Token to use for requests to the Github API [$MACHINE_GITHUB_API_TOKEN]
+--native-ssh					                            Use the native (Go-based) SSH implementation. [$MACHINE_NATIVE_SSH]
+--bugsnag-api-token 	                            BugSnag API token for crash reporting [$MACHINE_BUGSNAG_API_TOKEN]
+--help, -h						                            show help
+--version, -v					                            print the version
 
 Commands:
-active		Print which machine is active
-config		Print the connection config for machine
-create		Create a machine
-env			Display the commands to set up the environment for the Docker client
-inspect		Inspect information about a machine
-ip			Get the IP address of a machine
-kill			Kill a machine
-ls			List machines
-provision		Re-provision existing machines
-regenerate-certs	Regenerate TLS Certificates for a machine
-restart		Restart a machine
-rm			Remove a machine
-ssh			Log into or run a command on a machine with SSH.
-scp			Copy files between machines
-start			Start a machine
-status		Get the status of a machine
-stop			Stop a machine
-upgrade		Upgrade a machine to the latest version of Docker
-url			Get the URL of a machine
-version		Show the Docker Machine version or a machine docker version
-help			Shows a list of commands or help for one command
+active		        Print which machine is active
+config		        Print the connection config for machine
+create		        Create a machine
+env			          Display the commands to set up the environment for the Docker client
+inspect		        Inspect information about a machine
+ip			          Get the IP address of a machine
+kill			        Kill a machine
+ls			          List machines
+provision		      Re-provision existing machines
+regenerate-certs  Regenerate TLS Certificates for a machine
+restart		        Restart a machine
+rm			          Remove a machine
+ssh			          Log into or run a command on a machine with SSH.
+scp			          Copy files between machines
+start			        Start a machine
+status		        Get the status of a machine
+stop			        Stop a machine
+upgrade		        Upgrade a machine to the latest version of Docker
+url			          Get the URL of a machine
+version		        Show the Docker Machine version or a machine docker version
+help			        Shows a list of commands or help for one command
 
 Run 'docker-machine COMMAND --help' for more information on a command.
 
