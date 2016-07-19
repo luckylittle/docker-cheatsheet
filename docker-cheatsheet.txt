@@ -1,6 +1,6 @@
 /---------------------------------------------------------------\
 |  Author:      Lucian Maly <lucian.maly@oracle.com>            |
-|  Last update: 2016-07-17 (for Docker v1.10.2, build c3959b1,  |
+|  Last update: 2016-07-19 (for Docker v1.10.2, build c3959b1,  |
 |                        Docker-machine v0.7.0, build a650a40,  |
 |                        Docker-compose v1.6.2, build 4d72027)  |
 \---------------------------------------------------------------/
@@ -578,6 +578,10 @@ $ docker info
 $ docker run -d nginx
 $ docker ps
 $ docker ps -a
+
+New in v1.12:
+$ docker service create --replicas 3 --name frontend --network mynet --publish 80:80/tcp --constraint engine.labels.com.example.storage==ssd frontend_image:latest
+$ docker service scale frontend=10
 
 
 APPENDIX#3 - AWS
