@@ -205,10 +205,10 @@ A=added
 C=changed
 D=deleted
 
-Rename images:
+Rename images (some Docker versions only allow lowercase tags!):
 $ docker tag ubuntu:14.04 foobar
 
-Tag image:
+Tag image (some Docker versions only allow lowercase tags!):
 $ docker tag ubuntu:14.04 foo:bar
 
 Change repository:
@@ -216,9 +216,11 @@ $ docker tag flask how2dock/flask sebimac:flask
 $ docker tag <REGISTRYHOST>/<USERNAME>/<REPOSITORY> <IMAGE>:<TAG>
 
 Export/import/load/save container to/from tar:
-(1) Stop container
-(2) $ docker export <container_ID> > container.tar
-(3) $ docker import - <image_name> < container.tar
+ (1) Stop container
+ (2) $ docker export <container_ID> > container.tar
+ (3) $ docker import - <image_name> < container.tar
+$ docker import APOL_EL6_VM_Base_1-0-0.tar
+$ docker tag 54358f7e7c88 luckylittle/apol_el6_vm_base:version1.0.0
 -this will remove history
 
 Already commited image:
