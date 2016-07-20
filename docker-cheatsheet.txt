@@ -1,6 +1,6 @@
 /---------------------------------------------------------------\
 |  Author:      Lucian Maly <lucian.maly@oracle.com>            |
-|  Last update: 2016-07-19 (for Docker v1.10.2, build c3959b1,  |
+|  Last update: 2016-07-20 (for Docker v1.10.2, build c3959b1,  |
 |                        Docker-machine v0.7.0, build a650a40,  |
 |                        Docker-compose v1.6.2, build 4d72027)  |
 \---------------------------------------------------------------/
@@ -219,16 +219,21 @@ Export/import/load/save container to/from tar:
  (1) Stop container
  (2) $ docker export <container_ID> > container.tar
  (3) $ docker import - <image_name> < container.tar
+Example of importing image, making changes and exporting image:
 $ docker import APOL_EL6_VM_Base_1-0-0.tar
 $ docker tag 54358f7e7c88 luckylittle/apol_el6_vm_base:version1.0.0
--this will remove history
+$ docker run -it -h oel6.dedc2.oraclecloud.com --name oel6.dedc2.oraclecloud.com -v /fsnadmin:/fsnadmin luckylittle/apol_el6_vm_base:version1.0.0 /bin/bash
+<- MAKE CHANGES HERE AND THEN EXIT THE CONTAINER ->
+$ docker commit -a lucian.maly@oracle.com -m "Added PDIT Puppet" 931322f3b88a luckylittle/apol_el6_vm_base:version1.0.1
+$ docker save luckylittle/apol_el6_vm_base:version1.0.1 > ~/apol_el6_vm_base_v1.0.1.tar
+-this will remove history!!!
 
 Already commited image:
 $ docker save -o <new_image>.tar <old_image>
 $ docker rmi <old_image>
 $ docker load < <new_image>.tar
 $ docker images
--this will retain history
+-this will retain history!!!
 
 
 VOLUMES
