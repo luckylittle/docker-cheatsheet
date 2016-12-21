@@ -539,6 +539,7 @@ wait      Block until a container stops, then print its exit code
 
 APPENDIX#2 - SWARM
 ------------------
+https://docs.docker.com/swarm/provision-with-machine
 
 (1) Download the swarm container onto the Docker host:
 $ docker pull swarm
@@ -557,6 +558,7 @@ $ docker-machine create \
   --swarm \
   --swarm-discovery token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl \
   swarm-node1
+$ eval "$(docker-machine env local)"
 
 (4) Check if it started:
 $ docker ps
@@ -576,17 +578,36 @@ $ echo $DOCKER_CERT_PATH; unset DOCKER_CERT_PATH
 (8) Set DOCKER_HOST environment variable to the IP+port that our manager is running on:
 $ export DOCKER_HOST="tcp://172.17.42.10:9999"((("docker", "info")))
 
-(9) And you will be able to run normal Docker commands against the swarm:
+(9) Run this command to configure your shell:
+$ eval $(docker-machine env --swarm <HOST_NODE_NAME>)
+$ eval $(docker-machine env --swarm swarm-manager) 
+
+(10) And you will be able to run normal Docker commands against the entire swarm cluster:
 $ docker info
 
-(10) Run an nginx container in our new cluster:
+(11) Run an nginx container in our new cluster:
 $ docker run -d nginx
 $ docker ps
 $ docker ps -a
 
-New in v1.12:
-$ docker service create --replicas 3 --name frontend --network mynet --publish 80:80/tcp --constraint engine.labels.com.example.storage==ssd frontend_image:latest
-$ docker service scale frontend=10
+ +New in v1.12:
+  # You can now use TLS
+  $ docker-machine env --swarm <HOST_NODE_NAME>
+  $ export DOCKER_MACHINE_NAME="swarm-manager"
+  $ export DOCKER_HOST="tcp://000.000.00.000:0000"
+  $ export DOCKER_TLS_VERIFY="1"
+  $ export DOCKER_CERT_PATH="/Users/lmaly/.docker/machine/machines/swarm-manager"
+ 
+  # You can limit the set of nodes where a task can be scheduled by defining constraint expressions:
+  $ docker service create --replicas 3 --name frontend --network mynet --publish 80:80/tcp --constraint engine.labels.com.example.storage==ssd frontend_image:latest
+  $ docker service scale frontend=10
+
+ +Things to consider:
+  Load balancing & service discovery - Progrium's registrator, Consul
+  Metrics & monitoring               - Datadog and friends
+  Networked volumes                  - Flocker
+  Network segregation & security     - AWS VPC
+  Infrastructure automation          - Terraform
 
 
 APPENDIX#3 - AWS
@@ -812,27 +833,3 @@ g/ EXPOSE         - expose ports from the image to the outside world
 h/ ENTRYPOINT     - use in conjunction with CMD, set additional switches that may change over time based on the CMD command
     *CMD          - executes the given commands and keeps the container running
 i/ USER           - what username to use when a command is run (influences RUN, CMD, ENTRYPOINT)
-
-APPENDIX #7 - SWARM
--------------------
-https://docs.docker.com/swarm/provision-with-machine
-$ docker-machine create -d virtualbox local
-$ eval "$(docker-machine env local)"
-$ docker run swarm create
-
-$ docker-machine env --swarm <HOST_NODE_NAME>
-$ export DOCKER_TLS_VERIFY="1"
-$ export DOCKER_HOST="tcp://000.000.00.000:0000"
-$ export DOCKER_CERT_PATH="/Users/lmaly/.docker/machine/machines/swarm-manager"
-$ export DOCKER_MACHINE_NAME="swarm-manager"
-
-Then run this command to configure your shell:
-$ eval $(docker-machine env --swarm <HOST_NODE_NAME>)
-$ eval $(docker-machine env --swarm swarm-manager)    <-after that you will run docker commands on the entire cluster
-$ docker info
-
-Load balancing & service discovery - Progrium's registrator, Consul
-Metrics & monitoring               - Datadog and friends
-Networked volumes                  - Flocker
-Network segregation & security     - AWS VPC
-Infrastructure automation          - Terraform
