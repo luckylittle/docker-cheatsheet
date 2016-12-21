@@ -1,6 +1,6 @@
 /---------------------------------------------------------------\
 |  Author:      Lucian Maly <lucian.maly@oracle.com>            |
-|  Last update: 2016-07-20 (for Docker v1.10.2, build c3959b1,  |
+|  Last update: 2016-12-21 (for Docker v1.10.2, build c3959b1,  |
 |                        Docker-machine v0.7.0, build a650a40,  |
 |                        Docker-compose v1.6.2, build 4d72027)  |
 \---------------------------------------------------------------/
@@ -738,15 +738,60 @@ unpause            Unpause services
 up                 Create and start containers
 version            Show the Docker-Compose version information
 
-$ docker-compose [-f=<arg>...] [options] [COMMAND] [ARGS...]
+This will merge lists/YMLs together (latter one on the command line always overrides the earlier one if there are same variables), it also automatically does that with 'docker-compose.override.yml' (when you NOT use -f):
+$ docker-compose -f <docker-compose1.yml> -f <docker-compose2.yml> config
+
+Default project name is the directory name by default, you can change that:
+$ docker-compose --project-name foo up -d
+
+$ docker-compose config
 $ docker-compose ps
+$ docker-compose pause|unpause
 $ docker-compose restart
 $ docker-compose restart <service>
 $ docker-compose restart node1
 $ docker-compose up
 $ docker-compose up -d
-$ docker-compose scale web=3
+$ docker-compose down
 
+$ docker-compose scale <SERVICE>=3
+$ docker-compose run <SERVICE> ls /
+
+$ docker-compose port <SERVICE> 80
+$ docker-compose port --index=2 <SERVICE> 80    <-second worker's exposed port number on the host
+$ docker-compose logs
+$ docker-compose events
+
+Environment variables in 'docker-compose':
+==========================================
+ 1, TAG=latest <CMD>  - when ${TAG} is in the YML
+ 2, touch .env        - automatically read by compose
+ 3, touch staging.env - env_file: - "staging.env" in the YML
+ 4, environment:      - in the YML file
+ 
+Extends example in 'docker-compose':
+====================================
+$ cat docker-compose.yml
+version: '2'
+services:
+  hello:
+    extends:
+	  file: base.yml
+	  service: base
+	ports:
+	  - 80
+	environment:
+	  SERVICE: hello
+
+$ cat base.yml
+version: '2'
+services:
+  base:
+    image: tutum/hello-world
+	environment:
+	  SERVICE: base
+	
+$ docker-compose config    <-this will show the two merged
 
 APPENDIX #6 - DOCKERFILE
 ------------------------
@@ -767,3 +812,27 @@ g/ EXPOSE         - expose ports from the image to the outside world
 h/ ENTRYPOINT     - use in conjunction with CMD, set additional switches that may change over time based on the CMD command
     *CMD          - executes the given commands and keeps the container running
 i/ USER           - what username to use when a command is run (influences RUN, CMD, ENTRYPOINT)
+
+APPENDIX #7 - SWARM
+-------------------
+https://docs.docker.com/swarm/provision-with-machine
+$ docker-machine create -d virtualbox local
+$ eval "$(docker-machine env local)"
+$ docker run swarm create
+
+$ docker-machine env --swarm <HOST_NODE_NAME>
+$ export DOCKER_TLS_VERIFY="1"
+$ export DOCKER_HOST="tcp://000.000.00.000:0000"
+$ export DOCKER_CERT_PATH="/Users/lmaly/.docker/machine/machines/swarm-manager"
+$ export DOCKER_MACHINE_NAME="swarm-manager"
+
+Then run this command to configure your shell:
+$ eval $(docker-machine env --swarm <HOST_NODE_NAME>)
+$ eval $(docker-machine env --swarm swarm-manager)    <-after that you will run docker commands on the entire cluster
+$ docker info
+
+Load balancing & service discovery - Progrium's registrator, Consul
+Metrics & monitoring               - Datadog and friends
+Networked volumes                  - Flocker
+Network segregation & security     - AWS VPC
+Infrastructure automation          - Terraform
