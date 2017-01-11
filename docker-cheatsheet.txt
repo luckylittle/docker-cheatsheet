@@ -541,6 +541,97 @@ APPENDIX#2 - SWARM
 ------------------
 https://docs.docker.com/swarm/provision-with-machine
 
+#########################################
+## Docker Swarm v1 (before Docker v1.12)
+#########################################
+
+Do we have some running machines/nodes already?
+$ docker-machine ls
+
+Create machine/node 'default' using the virtualbox:
+$ docker-machine create --driver virtualbox <default>
+
+Configure your shell (export env variables) to remotely gain access:
+$ docker-machine env <default>
+
+Currently active machine?
+$ docker-machine active
+
+SSH to the node and verify running processes:
+$ docker-machine ssh <default> ps aux | grep docker
+
+Provision other three hosts:
+$ docker-machine create --driver virtualbox node1
+$ docker-machine create --driver virtualbox node2
+$ docker-machine create --driver virtualbox node3
+$ docker-machine ls
+
+Port numbers:
++--------------+---------------------------------------------------+
+| Insecure     | Secure                                            |
++--------------+---------------------------------------------------+
+| Engine: 2375 | Engine: 2376                                      |
+| Swarm: 3375  | Swarm: 3376                                       |
+|              | Swarm v2 uses 2377 for node discovery among nodes |
++--------------+---------------------------------------------------+
+
+Change the listening port on the 'default' node and disable TLS:
+$ docker-machine ssh <default>
+  $ sudo su -
+  # cp /var/lib/boot2docker/profile /var/lib/boot2docker/profile-bak
+  # vi /var/lib/boot2docker/profile
+    EXTRA_ARGS='
+    --label provider=virtualbox
+    '
+    DOCKER_HOST='-H tcp://0.0.0.0:2375'
+    DOCKER_STORAGE=aufs
+    DOCKER_TLS=no
+  # exit
+  $ exit
+$ docker-machine restart <default>
+$ unset DOCKER_TLS_VERIFY
+$ export DOCKER_HOST="tcp://192.168.XX.XXX:2375"
+
+To get started with swarm, pull the image from registry on each of the nodes:
+$ docker pull swarm
+
+See the Swarm help:
+$ docker run swarm --help
+  !Create - is used to create clusters with a discovery service, for example token://
+  !List   - shows the list of the cluster nodes
+  !Manage - allows you to operate a Swarm cluster
+  !Join   - in combination with a discovery service, is used for joining new nodes to an existing cluster
+$ docker run swarm manage --help
+
+To connect nodes, in each machine/node terminal, execute this:
+$ docker run \
+-d \
+-p 3376:2375 \
+swarm manage \
+nodes://192.168.XX.XXX:2375,192.168.XX.XXX:2375,
+192.168.XX.XXX:2375,192.168.XX.XXX:2375
+ !Note: nodes:// can be simplified (same as Ansible) to nodes://192.168.XX.[XX1:XX3]:2375
+
+When we want to talk to the whole cluster, we need to use port 3376, to do that:
+$ docker-machine env <default>
+$ eval $(docker-machine env default)
+$ export | grep DOCKER_
+$ export DOCKER_HOST="tcp://192.168.XX.XXX:3376"
+$ unset DOCKER_TLS_VERIFY
+$ unset DOCKER_CERT_PATH
+$ docker info
+
+Test your Swarm cluster - run container and process status will show node number in the NAME section:
+$ docker run -d -p 80:80 nginx
+$ docker ps
+ !When you run the same container three more times, it will spread them across the four nodes
+ !It will not allow 5th container, because on all hosts, port tcp/80 are already occupied
+
+
+#########################################
+## Docker Swarm v2 (after Docker v1.12)
+#########################################
+
 (1) Download the swarm container onto the Docker host:
 $ docker pull swarm
 
@@ -550,15 +641,15 @@ $ docker run --rm swarm create
 (3a) Register a Docker host with our cluster, provide IP+port of our Docker host and the first received token:
 $ docker run -d swarm join --addr=172.17.42.10:2375 token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl
 
-OR
+OR with different dicovery service 'token':
 
-(3b) Invoke a Docker Machine command to create a new Docker container and join it to the existing Swarm cluster:
-$ docker-machine create \
-  -d virtualbox \
-  --swarm \
-  --swarm-discovery token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl \
-  swarm-node1
-$ eval "$(docker-machine env local)"
+ (3b) Invoke a Docker Machine command to create a new Docker container and join it to the existing Swarm cluster:
+ $ docker-machine create \
+   -d virtualbox \
+   --swarm \
+   --swarm-discovery token://ekjn3kjbn34kjb34kbekj3bdopfjl43jkkjefl \
+   swarm-node1
+ $ eval "$(docker-machine env local)"
 
 (4) Check if it started:
 $ docker ps
