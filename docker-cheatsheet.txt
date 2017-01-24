@@ -157,7 +157,8 @@ List all containers with a specific label:
 $ docker ps --filter label=traffic.backend
 
 Query a specific metadata of a running container:
-$ docker inspect -f '{.NetworkSettings.IPAddress}' c7337
+$ docker inspect -f '{{.NetworkSettings.IPAddress}}' c7337
+$ docker inspect -f '{{.Config.Hostname}}' b7e2fe3b2e9b
 
 
 BUILD IMAGES
