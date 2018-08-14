@@ -1,6 +1,6 @@
 /---------------------------------------------------------------\
 |  Author:      Lucian Maly <lucian.maly@oracle.com>            |
-|  Last update: 2016-12-21 (for Docker v1.10.2, build c3959b1,  |
+|  Last update: 2018-08-14 (for Docker v1.10.2, build c3959b1,  |
 |                        Docker-machine v0.7.0, build a650a40,  |
 |                        Docker-compose v1.6.2, build 4d72027)  |
 \---------------------------------------------------------------/
@@ -925,3 +925,9 @@ g/ EXPOSE         - expose ports from the image to the outside world
 h/ ENTRYPOINT     - use in conjunction with CMD, set additional switches that may change over time based on the CMD command
     *CMD          - executes the given commands and keeps the container running
 i/ USER           - what username to use when a command is run (influences RUN, CMD, ENTRYPOINT)
+
+ENTRYPOINT vs. CMD
+------------------
+ENTRYPOINT defines the executable invoked when the container is started:
+e.g. ENTRYPOINT ["node", "app.js"] => This runs the 'node' process directly and not inside the shell!
+CMD specifies the arguments that get passed to the ENTRYPOINT.
