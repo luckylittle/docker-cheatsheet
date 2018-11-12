@@ -7,6 +7,6 @@ $ wget --no-check-certificate https://raw.githubusercontent.com/luckylittle/dock
 ```
 
 ### Contributors
-Lucian Maly <lucian@redhat.com> ~~<<lucian.maly@oracle.com>>~~
+Lucian Maly <<lucian@redhat.com>> ~~<<lucian.maly@oracle.com>>~~
 
 [@LucianMaly](https://twitter.com/LucianMaly) on Twitter
